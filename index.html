@@ -739,6 +739,194 @@ w:"Picking or averaging silently hides a real data problem.",
 p:"Surface conflicts with provenance. Don't resolve them silently."}
 ];
 
+BANK.push(
+// ---------- S1 additions ----------
+{s:1,d:1,q:"The team proposes replacing the agentic loop with a hardcoded call sequence (`get_customer`, then `lookup_order`, then reply). Product wants the agent to handle new request types without code changes. What is the best design?",
+o:["Keep the hardcoded sequence and add a new branch for each request type","Keep the agentic loop so Claude picks tools from results, and gate only must-hold steps","Let Claude choose tools freely with no gates, since the loop adapts to new requests","Hardcode the sequence, and let Claude rewrite the sequence at runtime if needed"],a:1,
+e:"An agentic loop adapts to unforeseen requests. Code gates still guarantee the few steps that must always happen, such as identity checks.",
+w:"Hardcoding needs a code change per request type. Removing all gates loses guarantees. Runtime-rewritten sequences are an agent loop without the structure.",
+p:"Agents for open-ended flow. Code gates for the steps that must always hold."},
+
+{s:1,d:1,q:"Your loop executes a `lookup_order` call. How must the result go back to Claude for the next request?",
+o:["As a new user text message that paraphrases the order details","Keep the assistant turn, then reply with `tool_result` blocks by `tool_use_id`","Add the result to the system prompt so it stays visible for later turns","Start a new conversation that contains only a summary and the result"],a:1,
+e:"The API pairs each `tool_use` block with a `tool_result` block carrying the same `tool_use_id`. The assistant turn must stay in the history.",
+w:"Paraphrased text, system-prompt injection and fresh conversations all break the tool-use protocol and lose context.",
+p:"Return tool results as `tool_result` blocks matched by `tool_use_id`."},
+
+{s:1,d:1,q:"Claude returns two `tool_use` blocks in one response, one for each of the customer's two orders. What should your loop do?",
+o:["Run only the first call and let Claude request the second on the next turn","Run both and send each result back in its own separate user message","Run both and return both `tool_result` blocks together in one user message","Reject the response and instruct Claude to call one tool at a time"],a:2,
+e:"Parallel tool calls are answered together. All results go in the next user message, each matched to its `tool_use_id`.",
+w:"Dropping a call or splitting results across messages breaks the pairing. Forcing serial calls wastes turns.",
+p:"Answer parallel tool calls with all results in one user message."},
+
+{s:1,d:4,q:"`process_refund` takes `amount` as a free-text string. Claude sometimes passes values like 'about 50 dollars', which the payment API rejects. What is the best fix?",
+o:["Parse the string in the tool with a regex and keep the free-text field","Add a sentence to the description asking for numbers only in that field","Type `amount` as a number with a currency enum, `order_id` required","Let the payment API errors reach Claude so it learns to correct itself"],a:2,
+e:"A precise input schema constrains what Claude can send. Typed fields prevent the malformed values at the source.",
+w:"Regex parsing hides ambiguity. Description text alone is weaker than a schema. Relying on downstream errors wastes calls.",
+p:"Constrain tool inputs with typed, required, enumerated schema fields."},
+
+{s:1,d:4,q:"Three other agent teams will also need order lookup against the same internal database. How should you expose it?",
+o:["Define it in-process in your agent and give other teams a copy of the code","Package it as an MCP server that every team's agent can connect to","Document the database schema so each team writes its own query tool","Expose it as one generic `run_sql` tool that every agent can use"],a:1,
+e:"An MCP server gives one maintained, reusable integration with consistent behaviour across agents.",
+w:"Copied code drifts. Per-team tools duplicate work. A raw SQL tool is broad and risky.",
+p:"Reusable integrations across agents belong in MCP servers."},
+
+// ---------- S2 additions ----------
+{s:2,d:1,q:"During a large refactor, the main Claude Code session fills its context while reading 30 modules. What is the best orchestration change?",
+o:["Delegate module groups to subagents that return summaries","Read all 30 modules up front so every later decision has full information","Raise the context window limit and continue in the same main session","Split the work across 30 separate sessions with no shared summary"],a:0,
+e:"Subagents absorb the verbose reading in their own contexts. The main session keeps a clean view for decisions.",
+w:"Reading everything first is what caused the problem. Separate sessions without a summary lose the overall picture.",
+p:"Push verbose investigation into subagents. Keep the lead context for decisions."},
+
+{s:2,d:1,q:"Two developers want Claude Code to build two unrelated features in the same repository at the same time. What avoids the sessions overwriting each other?",
+o:["Run both sessions in the same checkout and tell each to avoid the other's files","Give each session its own git worktree and branch","Run the sessions one after the other on a single shared branch","Use plan mode in both sessions so nothing changes until approved"],a:1,
+e:"Separate worktrees isolate the file trees. Each session works on its own branch without collisions.",
+w:"Instructions do not prevent conflicts. Serialising removes the parallelism. Plan mode only delays the same collisions.",
+p:"Isolate parallel agent work with separate worktrees."},
+
+{s:2,d:4,q:"An internal docs MCP tool returns entire 50-page documents for every query, flooding Claude Code's context. How should the tools be redesigned?",
+o:["Keep one tool, but cap every response at the first 2,000 characters","A `search_docs` tool returning snippets, plus `get_doc` by ID","Ask the user to paste the relevant section before Claude starts","Return the full document, but tell Claude to read only what it needs"],a:1,
+e:"Search-then-fetch lets Claude find what matters cheaply and retrieve full text only when needed.",
+w:"Hard truncation drops relevant content. Manual pasting defeats the integration. Instructions do not reduce tokens.",
+p:"Design tools for search-then-fetch, returning the minimum useful content."},
+
+{s:2,d:4,q:"A Jira MCP tool returns 'invalid input' when a due date has the wrong format. Claude retries the same input several times. What should the tool return instead?",
+o:["The same message, with retries capped at two attempts on the client side","An actionable error: the field, the expected format, and an example value","A success response with the due date silently left empty","A full stack trace from the Jira API, so Claude can debug it"],a:1,
+e:"An actionable message tells Claude exactly what to change. The next call succeeds instead of repeating the mistake.",
+w:"Capping retries hides the cause. Silent success corrupts data. Stack traces are noisy and rarely actionable.",
+p:"Tool errors should say what was wrong and how to fix it."},
+
+// ---------- S3 additions ----------
+{s:3,d:1,q:"The coordinator spawns 12 subagents even for simple factual questions, multiplying cost. What is the best fix?",
+o:["Hard-limit the system to two subagents for every query type","Tell the coordinator how to scale subagent count to query complexity","Remove the coordinator and let a single subagent answer everything","Let subagents cancel themselves when they think the task is too simple"],a:1,
+e:"Effort-scaling rules in the coordinator prompt match resources to the task: one agent for a fact, many for broad research.",
+w:"A fixed cap starves complex queries. Dropping orchestration loses parallel research. Self-cancelling is unreliable.",
+p:"Teach the coordinator to scale effort to query complexity."},
+
+{s:3,d:1,q:"Logs show three subagents ran nearly identical searches and returned overlapping findings. What should the coordinator change?",
+o:["Run the subagents sequentially so later ones can see earlier results","Give each subagent a distinct objective, scope and output format","Deduplicate the overlapping findings during the synthesis step","Use fewer subagents so overlap becomes less likely"],a:1,
+e:"Vague delegation causes duplicated work. Clear, non-overlapping task descriptions fix it at the source.",
+w:"Serial runs lose parallelism. Deduplication still pays for wasted work. Fewer agents reduces coverage.",
+p:"Delegate with distinct objectives, boundaries and output formats."},
+
+{s:3,d:1,q:"A multi-hour research run approaches the coordinator's context limit, and earlier plans risk being lost. What protects the run?",
+o:["Have the coordinator save its plan to external memory it can reload","Stop the run and ask the user to restart it with a narrower question","Trust automatic summarisation to keep the plan intact as context fills","Switch the coordinator to a smaller model that uses fewer tokens"],a:0,
+e:"Writing the plan and key findings to external storage lets the coordinator continue reliably after context is trimmed or reset.",
+w:"Restarting wastes work. Summarisation can drop plan details. Model size does not change context needs.",
+p:"Persist plans and progress outside the context for long runs."},
+
+{s:3,d:1,q:"The final step formats every citation into the client's house style. Results are occasionally inconsistent. What is the best change?",
+o:["Add more citation-style examples to the synthesis agent prompt","Format citations in code from the structured source data","Add a reviewer agent that checks every citation after synthesis","Lower the temperature on the synthesis agent to zero"],a:1,
+e:"A fixed transformation of structured data has one correct output. Code does it perfectly every time.",
+w:"Examples, reviewers and temperature reduce variance but never guarantee it for a deterministic task.",
+p:"Use code, not models, for deterministic transformations."},
+
+{s:3,d:4,q:"The web search subagent issues long, highly specific queries that return almost nothing. The tool description says 'Searches the web.' What fixes it?",
+o:["Describe query strategy: start short and broad, then narrow","Have the tool silently shorten any query longer than five words","Replace the search subagent with a bigger model","Return an error whenever a query yields fewer than three results"],a:0,
+e:"Tool descriptions shape how the agent uses a tool. Explicit search strategy guidance changes the queries it writes.",
+w:"Silent rewriting surprises the agent. A bigger model may make the same mistake. Errors do not teach strategy.",
+p:"Put usage strategy into tool descriptions, not just capability."},
+
+{s:3,d:4,q:"The document analysis tool has a parameter named `source`. Subagents pass URLs, but it expects local file paths. What is the best fix?",
+o:["Rename it `file_path`, describe it, and return a clear error for URLs","Keep `source` and convert any URL to a temporary file without telling the agent","Add a line to each subagent prompt explaining what `source` means","Accept anything and return an empty analysis when the input is wrong"],a:0,
+e:"Unambiguous names, clear descriptions and explicit validation errors prevent misuse at the interface.",
+w:"Silent conversion hides behaviour. Prompt notes repeat what the schema should say. Empty results hide the error.",
+p:"Name and describe tool parameters unambiguously."},
+
+// ---------- S4 additions ----------
+{s:4,d:1,q:"Your codebase agent can run Bash. Reads should run freely, but any command that changes files needs approval. How do you enforce that?",
+o:["Tell the agent in its system prompt to ask before running write commands","Configure permissions: reads allowed, writes require approval","Give the agent no Bash access and only let it read files with Read","Log every command and review the logs at the end of each day"],a:1,
+e:"Permission configuration enforces the boundary deterministically, while keeping useful read access.",
+w:"Prompt rules are probabilistic. Removing Bash loses useful capability. After-the-fact logs do not prevent damage.",
+p:"Enforce capability boundaries with permissions, not instructions."},
+
+{s:4,d:1,q:"A migration will take Claude many sessions over several days. Each new session wastes time rediscovering what was done. What helps most?",
+o:["Keep one session open for the entire migration, whatever its length","A progress file of done, pending and decisions, read at each start","Ask the developer to re-explain the migration at the start of each session","Increase the context window so the old sessions can be pasted in"],a:1,
+e:"A durable progress file gives each fresh session the state it needs in seconds.",
+w:"One endless session degrades. Manual re-explaining is slow and lossy. Pasting old transcripts floods context.",
+p:"Carry state across sessions with a structured progress file."},
+
+{s:4,d:1,q:"The team wants a coordinator plus five subagents just to answer questions about one small service. What would you recommend?",
+o:["Go multi-agent, since more agents always produce more thorough answers","One agent with good tools; add subagents only if work parallelises","Five subagents with no coordinator, each answering independently","A coordinator with one subagent per file in the service"],a:1,
+e:"Multi-agent setups add cost and coordination overhead. They pay off for broad, parallel work, not narrow questions.",
+w:"More agents is not automatically better. Uncoordinated or per-file agents add noise and cost.",
+p:"Start with one agent. Add multi-agent only when the work truly parallelises."},
+
+{s:4,d:4,q:"The team wants reusable 'summarise incident' and 'draft postmortem' templates offered by their MCP server for users to pick. Which MCP primitive fits?",
+o:["Tools, one per template, that return the template text","Resources, one per template, listed in the resource catalog","Prompts, exposed by the server as reusable templates","Sampling requests the server sends to the client model"],a:2,
+e:"MCP prompts are server-defined, user-selectable templates. That is exactly this use case.",
+w:"Tools are model-invoked actions. Resources expose data. Sampling lets servers request completions.",
+p:"MCP prompts: templates. Resources: data. Tools: actions."},
+
+{s:4,d:4,q:"The issue tracker tool returns only internal UUIDs for issues and users. The agent mixes them up and quotes wrong tickets. What should the tool return?",
+o:["UUIDs only, plus a second tool that resolves any UUID to a name","Readable keys like `PROJ-123` and titles alongside the IDs","Base64-encoded IDs so they are shorter and cheaper in tokens","Only the issue titles, dropping the identifiers entirely"],a:1,
+e:"Meaningful identifiers and names help the agent reason and reference items correctly. Keep IDs for follow-up calls.",
+w:"An extra lookup tool adds calls. Encoding makes IDs less readable. Dropping IDs breaks follow-up actions.",
+p:"Tool outputs should favour meaningful, readable identifiers."},
+
+// ---------- S5 additions ----------
+{s:5,d:1,q:"The CI review agent must never push to `main`. What is the most reliable safeguard?",
+o:["State in the CI prompt that pushing to main is strictly forbidden","No push rights to main on the CI token, plus branch protection","Review the agent's transcript after each run for push attempts","Run the agent in plan mode so it cannot change anything"],a:1,
+e:"Least-privilege credentials and branch protection make the action impossible, regardless of model behaviour.",
+w:"Prompt rules can fail. Transcript review is after the fact. Plan mode is an interactive feature, not a CI safeguard.",
+p:"Limit what the agent can do through credentials and platform controls."},
+
+{s:5,d:1,q:"A Claude Code CI job sometimes loops on a broad task and hits the pipeline timeout. What is the best fix?",
+o:["Raise the pipeline timeout to two hours so the job can finish","Narrow the task prompt and set `--max-turns` as a safety cap","Remove the task description so Claude decides the scope itself","Kill the job after 10 minutes and mark the check as passed"],a:1,
+e:"A focused task reduces wandering. A turn cap is a guardrail that keeps CI predictable.",
+w:"Longer timeouts hide the problem. Vaguer tasks make it worse. Silently passing hides real failures.",
+p:"Focused tasks plus turn caps keep CI agents bounded."},
+
+{s:5,d:1,q:"A nightly job analyses 200 files for security issues in one Claude Code session and often degrades halfway. What is the best structure?",
+o:["One longer session with a larger context window","Parallel per-file jobs, then an aggregation step","Analyse only the 20 most recently changed files each night","Two sessions, each handling 100 files sequentially"],a:1,
+e:"Independent jobs keep each context small and focused. Aggregation combines the results consistently.",
+w:"Larger contexts still degrade. Sampling misses files. Two big sessions only halve the problem.",
+p:"Fan out independent units, then aggregate."},
+
+{s:5,d:4,q:"In CI, Claude Code should only read code and post review comments. How do you restrict it?",
+o:["Pass `--allowedTools` with only read tools and the comment tool","Tell it in the prompt not to use any write or shell tools","Run it in a container without network access","Enable all tools but review its actions in the job logs"],a:0,
+e:"An explicit allowlist enforces the minimal toolset for the job.",
+w:"Prompt rules are not enforcement. No network would block posting comments. Log review is after the fact.",
+p:"Allowlist the exact tools a CI job needs."},
+
+{s:5,d:4,q:"A custom test-runner tool returns 5,000 lines of log output per run. Claude's fix suggestions get worse as context fills. What should the tool return?",
+o:["The full log, so Claude never misses a detail","Only the last 50 lines of the log, whatever they contain","A summary of failed tests, errors and file:line references","A pass or fail flag with no detail at all"],a:2,
+e:"A focused summary gives Claude exactly what it needs to fix failures without drowning in passing output.",
+w:"Full logs flood context. Tail-only can miss the failure. A bare flag gives nothing to act on.",
+p:"Tool output should be high-signal: summarise and point to specifics."},
+
+// ---------- S6 additions ----------
+{s:6,d:1,q:"Invoices, contracts and papers each need different fields. One giant prompt handles all three and quality is uneven. What architecture fits best?",
+o:["Keep one prompt but add a long section for each document type","Classify the document type, then route to a type-specific prompt","Run all three extraction prompts on every document and keep the best","Ask users to upload each document type through a separate form"],a:1,
+e:"A routing workflow lets each prompt specialise. The classification step is simple and reliable.",
+w:"One giant prompt dilutes focus. Running all three triples cost. Separate forms push work to users.",
+p:"Route heterogeneous inputs to specialised prompts."},
+
+{s:6,d:1,q:"A 300-page contract exceeds what one request handles well. How should extraction be structured?",
+o:["Extract from the first 50 pages only, where key terms usually appear","Extract per chunk, then a merge step that dedupes and flags conflicts","Send the full contract in one request and ask for extra care","Summarise the contract first, then extract from the summary"],a:1,
+e:"A map-reduce pattern keeps each request focused. The merge step handles duplicates and contradictions explicitly.",
+w:"Partial reading misses terms. One huge request suffers lost-in-the-middle. Summaries drop exact values.",
+p:"Chunk long documents, then merge with dedupe and conflict flags."},
+
+{s:6,d:1,q:"The pipeline reads amounts from invoices, converts currencies and checks totals. Which steps should the model do?",
+o:["All of them, since the model can read and calculate in one pass","Reading values from the document; conversion and totals in code","Currency conversion only; reading and totals in code","None; use regular expressions for the whole pipeline"],a:1,
+e:"The model is good at reading varied documents. Arithmetic and rate conversion are deterministic and belong in code.",
+w:"Model arithmetic is unreliable. Code cannot read varied layouts well. Regex alone breaks on messy documents.",
+p:"Models for interpretation. Code for calculation."},
+
+{s:6,d:4,q:"The extraction tool's schema lists field names and types only. Claude confuses `effective_date` and `signature_date`. What helps most?",
+o:["Rename the fields to `date_1` and `date_2` to avoid assumptions","Add a description to each schema field stating its meaning","Merge both fields into one `dates` array","Remove `signature_date`, since it is rarely needed"],a:1,
+e:"Field descriptions travel with the tool definition and guide the model at exactly the point of decision.",
+w:"Generic names remove meaning. An array loses which date is which. Removing data loses information.",
+p:"Describe every schema field, not just its type."},
+
+{s:6,d:4,q:"An extraction schema nests objects eight levels deep. Claude often puts values at the wrong level. What should you do?",
+o:["Add a long explanation of the nesting to the system prompt","Flatten the schema, keeping only nesting the data needs","Split it into eight tools, one for each nesting level","Remove the schema and ask for free-form JSON instead"],a:1,
+e:"Simpler schemas are easier to fill correctly. Keep structure that reflects real relationships, drop the rest.",
+w:"Prompt explanations fight an over-complex interface. Eight tools add confusion. Free-form JSON loses validation.",
+p:"Keep tool schemas as simple as the data allows."}
+);
+
 </script>
 <script>
 (function(){
@@ -784,7 +972,7 @@ function renderHome(){
   app.innerHTML=`<div class="stack">
   <div><div class="eyebrow">Claude Certified Architect · Foundations</div>
   <h1 style="margin-top:10px">Practise the way the exam asks.</h1>
-  <p class="lede">90 original scenario questions across the six official scenarios. Every exam draws four scenarios with 15 questions each, like the real one. Learn mode explains every answer.</p></div>
+  <p class="lede">${BANK.length} original scenario questions across the six official scenarios. Every exam draws four scenarios with 15 questions each, weighted to the official domain blueprint. Learn mode explains every answer.</p></div>
   <div class="facts">
     <div><b>60</b><span>questions per exam</span></div>
     <div><b>120 min</b><span>time limit</span></div>
@@ -868,9 +1056,19 @@ function nextLearn(){L.i++;newOrder();renderLearn();window.scrollTo(0,0);}
 let E=null, tick=null;
 function loadExam(){if(E)return E;const e=store.get('exam',null);if(e&&!e.done){E=e;return E}return null}
 function saveExam(){store.set('exam',E)}
+/* 15 questions per scenario, steering the 60-question mix toward the official domain weights */
+const TARGET={1:16,2:12,3:12,4:11,5:9};
+function pickWeighted(scen){
+  const taken={1:0,2:0,3:0,4:0,5:0};const pools={},out={};
+  scen.forEach(s=>{pools[s]=shuffle(BANK.filter(q=>q.s===s));out[s]=[]});
+  for(let r=0;r<15;r++)for(const s of shuffle(scen)){
+    let best=-1,bs=-Infinity;pools[s].forEach((q,i)=>{const sc=(TARGET[q.d]-taken[q.d])/TARGET[q.d]+Math.random()*0.05;if(sc>bs){bs=sc;best=i}});
+    const q=pools[s].splice(best,1)[0];taken[q.d]++;out[s].push(q.id);}
+  return scen.flatMap(s=>out[s]);
+}
 function startExam(){
   const scen=shuffle(Object.keys(SCENARIOS)).slice(0,4).map(Number).sort((a,b)=>a-b);
-  const items=[];scen.forEach(s=>shuffle(BANK.filter(q=>q.s===s)).slice(0,15).forEach(q=>items.push({id:q.id,order:shuffle([0,1,2,3]),pick:null,flag:false})));
+  const items=pickWeighted(scen).map(id=>({id,order:shuffle([0,1,2,3]),pick:null,flag:false}));
   E={scen,items,cur:0,started:Date.now(),left:EXAM_SECONDS,done:false,confirm:false,showGrid:false};saveExam();renderExam();
 }
 function remaining(){return E.left-Math.floor((Date.now()-E.started)/1000)}
@@ -879,7 +1077,7 @@ function renderExam(){
   if(!loadExam()){
     const res=store.get('lastResult',null);
     app.innerHTML=`<div class="stack"><div><div class="eyebrow">Exam mode</div><h1 style="margin-top:8px">Full mock exam</h1>
-    <p class="lede">Four scenarios drawn at random, 15 questions each. 120 minutes. No feedback until you submit. Your answers are kept in this browser if you close the tab.</p></div>
+    <p class="lede">Four scenarios drawn at random, 15 questions each, with the domain mix weighted to the official blueprint. 120 minutes. No feedback until you submit. Your answers are kept in this browser if you close the tab.</p></div>
     <div class="panel stack"><h3>Before you start</h3>
     <ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px">
       <li>Read the scenario brief once. Every question in that block assumes it.</li>

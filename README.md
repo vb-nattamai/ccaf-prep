@@ -6,7 +6,7 @@ Independent practice tool. Not affiliated with or endorsed by Anthropic. All que
 
 ## Features
 
-- **Exam mode**: 4 of 6 scenarios drawn at random, 15 questions each, 60 total, 120-minute timer, flagging, scaled score against the 720 pass line.
+- **Exam mode**: 4 of 6 scenarios drawn at random, 15 questions each, 60 total, domain mix weighted to the official blueprint, 120-minute timer, flagging, scaled score against the 720 pass line.
 - **Learn mode**: instant feedback with why the answer is right, why the distractors fail, and the exam pattern behind it.
 - **Patterns**: all decision rules grouped by exam domain.
 - **Readiness tracking** per domain, weighted by the official blueprint.
@@ -26,7 +26,7 @@ Open `index.html` in a browser. It is one self-contained file.
 
 ## Content
 
-90 scenario-based questions across six scenarios and five domains:
+120 scenario-based questions across six scenarios and five domains. Exam draws are weighted to the official blueprint:
 
 | Domain | Weight |
 |---|---|
